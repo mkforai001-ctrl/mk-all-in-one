@@ -1,7 +1,13 @@
 'use strict';
 
-const CACHE_NAME = 'mk-calculator-v1';
-const APP_SHELL = ['./', './manifest.webmanifest', './icons/mk-calculator.svg'];
+const CACHE_NAME = 'mk-calculator-v2';
+const APP_SHELL = [
+  './',
+  './manifest.webmanifest',
+  './icons/mk-calculator-192.png',
+  './icons/mk-calculator-512.png',
+  './icons/mk-calculator.svg'
+];
 
 self.addEventListener('install', event => {
   event.waitUntil(
