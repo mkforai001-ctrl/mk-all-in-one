@@ -58,12 +58,13 @@ test('business calculations include known extra costs and report absent revenue 
   assert.doesNotMatch(conflictingRevenue.answer, /Balance after/);
 });
 
-test('percentage, discount, ratio, conversions, statistics, and linear equations are solved deterministically', () => {
+test('percentage, discount, ratio, conversions, statistics, geometry, and linear equations are solved deterministically', () => {
   assert.match(bot.analyze('What is 15% of 2000?', { lang: 'en' }).answer, /15% of 2,000 = 300/);
   assert.match(bot.analyze('Calculate 20% discount from ₦1,000', { lang: 'en' }).answer, /Discount amount: ₦200/);
   assert.match(bot.analyze('Simplify ratio 12:18', { lang: 'en' }).answer, /12:18 = 2:3/);
   assert.match(bot.analyze('Convert 2 km to m', { lang: 'en' }).answer, /2 km = 2,000 m/);
   assert.match(bot.analyze('Find the mean of 2, 4, 6', { lang: 'en' }).answer, /Mean .*: 4/);
+  assert.match(bot.analyze('Find area of a rectangle with length 8 and width 5', { lang: 'en' }).answer, /Rectangle area: 8 × 5 = 40 square units/);
   assert.match(bot.analyze('Solve 2x + 3 = 11', { lang: 'en' }).answer, /x = 8 ÷ 2 = 4/);
 });
 
