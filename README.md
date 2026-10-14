@@ -16,9 +16,13 @@ MK Calculator is a lightweight, mobile-first calculator for Hausa and English sp
 ```text
 index.html                  Main application (HTML, CSS, and application JavaScript)
 manifest.webmanifest        PWA name, display settings, and icon reference
-icons/mk-calculator.svg     Scalable app icon
+robots.txt                  Crawl access rules and sitemap location
+sitemap.xml                 Canonical public homepage URL
+icons/                       SVG and PNG app icons
 sw.js                       Versioned service worker and offline app-shell cache
 tests/calculations.test.js  Node.js tests for the calculator math
+tests/pwa.test.js           PWA path and service-worker lifecycle tests
+tests/seo.test.js           Metadata, crawl files, and canonical-path tests
 README.md                   Setup, publishing, and testing instructions
 ```
 
@@ -37,7 +41,7 @@ Open the **Ports** tab in Codespaces and open port `8000` in a browser. To test 
 Node.js 18 or newer is required. The tests use Node's built-in test runner and do not install packages.
 
 ```sh
-node --test tests/calculations.test.js
+node --test tests/*.test.js
 ```
 
 ## Publish with GitHub Pages
@@ -77,3 +81,17 @@ The service worker caches the app shell, serves navigation from the network when
 - No physical-device, screen-reader, or automated browser-layout test has been run for this project.
 
 To report a bug, open an issue in this GitHub repository. Include the calculator, browser and device, selected language, example inputs, and expected versus actual result. Do not include private financial or personal information.
+
+## Search Engine Setup
+
+The production website is `https://mkforai001-ctrl.github.io/mk-all-in-one/`. Its crawl rules are at `/robots.txt`, and its one-page sitemap is at `/sitemap.xml`. The sitemap lists only the public canonical homepage; submitting it does not guarantee indexing or rankings.
+
+To use Google Search Console:
+
+1. Sign in at [Google Search Console](https://search.google.com/search-console/about) and add the exact URL-prefix property `https://mkforai001-ctrl.github.io/mk-all-in-one/`.
+2. Complete one of the ownership verification methods Google offers. For the HTML-tag method, copy the complete tag issued for your property into the `<head>` of `index.html`, then publish and request verification. No verification token is included in this repository, and ownership has not been verified here.
+3. In Search Console, submit `https://mkforai001-ctrl.github.io/mk-all-in-one/sitemap.xml` under **Sitemaps**.
+4. Use **URL inspection** for `https://mkforai001-ctrl.github.io/mk-all-in-one/` to review Google's canonical and crawl status. If eligible, request indexing.
+5. Monitor the Page indexing and Search results performance reports for discovery and search activity.
+
+Google's official guides: [verify site ownership](https://support.google.com/webmasters/answer/9008080), [submit a sitemap](https://support.google.com/webmasters/answer/7451001), and [URL Inspection](https://support.google.com/webmasters/answer/9012289). Search Console actions do not guarantee that a page will be indexed or shown for a particular query. GitHub Pages serves static files and does not provide server-side rendering controls or arbitrary response-header configuration for this project.

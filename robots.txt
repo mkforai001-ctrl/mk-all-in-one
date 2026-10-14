@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mkforai001-ctrl.github.io/mk-all-in-one/sitemap.xml
