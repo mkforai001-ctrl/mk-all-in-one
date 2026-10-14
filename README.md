@@ -8,8 +8,10 @@ MK Calculator is a lightweight, mobile-first calculator for Hausa and English sp
 - Hausa and English interface, with the selected language saved on the device
 - Search, favorites, recently used calculators, and a saved light/dark theme
 - Responsive layout and touch-friendly calculator controls
+- MK MATH BOT for tested on-device arithmetic, business totals, interest and loan estimates, unit conversion, ratios, means, rectangles, and linear equations
+- Optional microphone input and spoken answers when browser speech APIs are available
 - Optional offline loading and Android installation through a web app manifest and service worker
-- No user accounts, application backend, analytics, or third-party runtime dependencies
+- No user accounts, configured AI backend, analytics, or third-party runtime dependencies
 
 ## Repository Files
 
@@ -23,6 +25,9 @@ sw.js                       Versioned service worker and offline app-shell cache
 tests/calculations.test.js  Node.js tests for the calculator math
 tests/pwa.test.js           PWA path and service-worker lifecycle tests
 tests/seo.test.js           Metadata, crawl files, and canonical-path tests
+math-bot.js                 Lazy-loaded deterministic local mathematics engine
+math-bot-client.js          Local/optional remote backend adapter
+tests/math-bot.test.js      Bot calculation, business, adapter, and UI wiring tests
 README.md                   Setup, publishing, and testing instructions
 ```
 
@@ -43,6 +48,30 @@ Node.js 18 or newer is required. The tests use Node's built-in test runner and d
 ```sh
 node --test tests/*.test.js
 ```
+
+## MK MATH BOT
+
+MK MATH BOT is a local, deterministic mathematics assistant, not a connected generative-AI chatbot. Its engine is loaded only when the bot screen opens and is included in the service-worker app shell so it can be used offline after that shell has been cached.
+
+Tested local operations include arithmetic expressions with parentheses, fractions and decimals, powers and percentages; percentage-of and discount calculations; business revenue, stated expenses, balances, profit/loss and break-even prices; simple and annually compounded interest; fixed-rate monthly loan estimates; common unit conversions; ratio simplification; arithmetic means; rectangle area; and single-variable linear equations. It checks inconsistent revenue totals, refuses unrelated topics, and identifies unsupported math instead of inventing an answer. It does not currently solve calculus, trigonometry, probability, arbitrary algebra, or every form of Hausa phrasing. Loan estimates assume fixed monthly repayments and exclude fees. Compound interest assumes annual compounding.
+
+The business examples distinguish revenue and stated expenses from profit. A remaining balance is not called profit unless the purchase cost is known. Advice is arithmetic based only on supplied values, not a prediction of market prices.
+
+### Voice
+
+Microphone input is activated only by the user and uses `SpeechRecognition` or `webkitSpeechRecognition` when available; recognized text can be reviewed before sending. Browser speech recognition may require network access and microphone permission, and Hausa language support varies by browser. Spoken answers use the browser's speech synthesis only after the user presses the play control. Unsupported voice APIs leave typed chat available.
+
+### Remote AI Backend
+
+No AI backend is configured or deployed. Without one, all replies come from `math-bot.js` locally; the interface identifies this mode and makes no claim that AI is responding. `math-bot-client.js` provides an optional HTTPS JSON `POST` adapter. A future backend can be configured by adding a public endpoint URL in a `<meta name="mk-math-bot-endpoint" content="https://your-service.example/api/math">` tag in `index.html`; this URL is not a secret. The endpoint must return JSON containing a non-empty `answer` string and can include a `type` string. Requests time out after 15 seconds, and backend errors remain visible without substituting a local answer.
+
+GitHub Pages cannot securely host the provider key or run that backend. A separate serverless function or backend service would need to keep provider credentials in server-side secrets, validate the request and response, enforce mathematics-only behavior itself, restrict origins as appropriate, rate-limit callers, and cap usage/costs. Frontend topic checks are not a security boundary. Do not put an API key in this repository, HTML, or the endpoint meta tag. No paid service is configured by this project.
+
+### Startup and Offline Notes
+
+The initial audit measured the original HTML at 44,887 bytes (13,007 bytes with local gzip) and found no remote scripts, fonts, or runtime dependencies; a production request's TTFB from the development environment was about 0.19 seconds. The current HTML is 60,359 bytes (16,990 bytes with local gzip); the added chat UI, labels, and styles increase the initial document. The 28,224-byte math engine and 3,380-byte backend adapter are dynamically imported only when the bot opens, so they are not downloaded or parsed as part of the initial HTML. They are precached by service worker `mk-calculator-v3` for later offline bot use; this adds an app-shell download during service-worker installation. These source/network observations do not measure Android cold-start time, and no physical-device or browser-profile measurement has been performed. No startup-speed improvement on Android is claimed.
+
+The five original calculators continue to run locally. Bot calculations also run locally once the bot modules are available from the network or app-shell cache. A configured remote service is never used as an offline substitute.
 
 ## Publish with GitHub Pages
 

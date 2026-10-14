@@ -1,12 +1,14 @@
 'use strict';
 
-const CACHE_NAME = 'mk-calculator-v2';
+const CACHE_NAME = 'mk-calculator-v3';
 const APP_SHELL = [
   './',
   './manifest.webmanifest',
   './icons/mk-calculator-192.png',
   './icons/mk-calculator-512.png',
-  './icons/mk-calculator.svg'
+  './icons/mk-calculator.svg',
+  './math-bot.js',
+  './math-bot-client.js'
 ];
 
 self.addEventListener('install', event => {

@@ -47,7 +47,7 @@ test('manifest declares existing PNG icons with accurate sizes and maskable supp
 
 test('service worker caches the install icons and avoids caching failed responses', () => {
   assert.match(html, /serviceWorker\.register\('\.\/sw\.js'\)/);
-  assert.match(worker, /const CACHE_NAME = 'mk-calculator-v2'/);
+  assert.match(worker, /const CACHE_NAME = 'mk-calculator-v3'/);
   assert.match(worker, /'\.\/icons\/mk-calculator-192\.png'/);
   assert.match(worker, /'\.\/icons\/mk-calculator-512\.png'/);
   assert.match(worker, /if \(response\.ok\) await cache\.put\(request, response\.clone\(\)\)/);
@@ -151,16 +151,18 @@ test('service worker installation caches every app-shell resource and fails atom
     './manifest.webmanifest',
     './icons/mk-calculator-192.png',
     './icons/mk-calculator-512.png',
-    './icons/mk-calculator.svg'
+    './icons/mk-calculator.svg',
+    './math-bot.js',
+    './math-bot-client.js'
   ].map(path => new URL(path, appUrl).href);
   assert.deepEqual(harness.requestedPaths, expectedPaths);
-  const cache = harness.cacheFor('mk-calculator-v2');
+  const cache = harness.cacheFor('mk-calculator-v3');
   for (const url of expectedPaths) assert.ok(await cache.match(url), `App shell should cache ${url}`);
   assert.equal(harness.skipWaitingCalled, true);
 
   const failingHarness = createWorkerHarness({ failedPaths: ['./icons/mk-calculator-512.png'] });
   await assert.rejects(failingHarness.dispatch('install', { waitUntil(promise) { this.promise = promise; } }));
-  assert.equal(failingHarness.cacheFor('mk-calculator-v2').entries.size, 0);
+  assert.equal(failingHarness.cacheFor('mk-calculator-v3').entries.size, 0);
   assert.equal(failingHarness.skipWaitingCalled, false);
 });
 
@@ -169,14 +171,14 @@ test('activation removes obsolete project caches but preserves unrelated caches'
   await harness.dispatch('install', { waitUntil(promise) { this.promise = promise; } });
   await harness.dispatch('activate', { waitUntil(promise) { this.promise = promise; } });
 
-  assert.deepEqual([...harness.cacheStores.keys()], ['unrelated-cache', 'mk-calculator-v2']);
+  assert.deepEqual([...harness.cacheStores.keys()], ['unrelated-cache', 'mk-calculator-v3']);
   assert.equal(harness.clientsClaimed, true);
 });
 
 test('navigation uses fresh network responses, preserves good cache on HTTP failure, and falls back offline', async () => {
   const harness = createWorkerHarness();
   await harness.dispatch('install', { waitUntil(promise) { this.promise = promise; } });
-  const cache = harness.cacheFor('mk-calculator-v2');
+  const cache = harness.cacheFor('mk-calculator-v3');
   const root = appUrl.href;
   const navigation = { method: 'GET', mode: 'navigate', url: root };
 
@@ -206,5 +208,5 @@ test('failed and missing assets are returned but never cached', async () => {
   const response = await harness.dispatch('fetch', event);
 
   assert.equal(response.status, 404);
-  assert.equal(await harness.cacheFor('mk-calculator-v2').match(missingUrl), undefined);
+  assert.equal(await harness.cacheFor('mk-calculator-v3').match(missingUrl), undefined);
 });
