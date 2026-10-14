@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'mk-calculator-v3';
+const CACHE_NAME = 'mk-calculator-v4';
 const APP_SHELL = [
   './',
   './manifest.webmanifest',

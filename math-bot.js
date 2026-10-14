@@ -53,7 +53,7 @@
   function evaluateExpression(source) {
     const input = source.replaceAll('−', '-').replaceAll(',', '').replace(/₦|NGN/gi, '').replace(/\s+/g, '');
     const tokens = [];
-    const matcher = /(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|[()+\-*/%^]/giy;
+    const matcher = /(?:sqrt|log|ln|sin|cos|tan|abs|pi|e)\b|π|(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|[()+\-*/%^]/giy;
     let cursor = 0;
     while (cursor < input.length) {
       matcher.lastIndex = cursor;
@@ -76,6 +76,33 @@
         if (tokens[index++] !== ')') throw new Error('unsupported-expression');
         return value;
       }
+      if (['sqrt', 'log', 'ln', 'sin', 'cos', 'tan', 'abs'].includes(token)) {
+        let argument;
+        if (tokens[index] === '(') {
+          index += 1;
+          argument = addition();
+          if (tokens[index++] !== ')') throw new Error('unsupported-expression');
+        } else {
+          argument = primary();
+        }
+        if (token === 'sqrt') {
+          if (argument < 0) throw new Error('invalid-domain');
+          return Math.sqrt(argument);
+        }
+        if (token === 'log' || token === 'ln') {
+          if (argument <= 0) throw new Error('invalid-domain');
+          return token === 'log' ? Math.log10(argument) : Math.log(argument);
+        }
+        if (token === 'sin') return Math.sin(argument);
+        if (token === 'cos') return Math.cos(argument);
+        if (token === 'tan') {
+          if (Math.abs(Math.cos(argument)) < 1e-12) throw new Error('invalid-domain');
+          return Math.tan(argument);
+        }
+        return Math.abs(argument);
+      }
+      if (token === 'pi' || token === 'π') return Math.PI;
+      if (token === 'e') return Math.E;
       const value = Number(token);
       if (!Number.isFinite(value)) throw new Error('invalid-result');
       return value;
@@ -196,9 +223,9 @@
   function analyzeBusiness(text, lang) {
     const isHa = lang === 'ha';
     const lower = text.toLocaleLowerCase();
-    const quantityPattern = new RegExp(`\\b(?:sold|bought|purchased|na\\s+sayar\\s+da|na\\s+sayi|na\\s+saye)\\s+(${NUMBER_SOURCE})\\s+([\\p{L}]+)|\\b(${NUMBER_SOURCE})\\s+(bags?|bowls?|items?|pieces?|units?|jakkuna?|kwano)\\b`, 'iu');
+    const quantityPattern = new RegExp(`\\b(?:sold|bought|purchased|na\\s+sayar\\s+da|na\\s+sayi|na\\s+saye)\\s+(${NUMBER_SOURCE})\\s+([\\p{L}]+)|\\b(${NUMBER_SOURCE})\\s+(bags?|bowls?|items?|pieces?|units?|jakkuna?|kwano)\\b|\\b(?:nasiyo|na\\s+siyo)\\s+(?:masara\\s+)?(?:kawano|kwano)\\s+(${NUMBER_SOURCE})\\b`, 'iu');
     const quantityMatch = lower.match(quantityPattern);
-    let quantity = quantityMatch ? numberValue(quantityMatch[1] || quantityMatch[3]) : null;
+    let quantity = quantityMatch ? numberValue(quantityMatch[1] || quantityMatch[3] || quantityMatch[5]) : null;
     if (quantity === null) {
       const reverseQuantity = new RegExp(`\\b(?:bags?|bowls?|items?|pieces?|units?|jakkuna?|kwano)\\s+(${NUMBER_SOURCE})\\b`, 'iu').exec(lower);
       quantity = reverseQuantity ? numberValue(reverseQuantity[1]) : null;
@@ -206,12 +233,15 @@
     const salePatterns = [
       new RegExp(`(?:selling\\s+price|sale\\s+price|current\\s+(?:selling\\s+)?price|farashin\\s+sayarwa)\\s*(?:is|of|na|=|:)?\\s*${CURRENCY_SOURCE}${PLAIN_AMOUNT_SOURCE}`, 'iu'),
       new RegExp(`(?:sold|sell|selling)\\s+(?:for|at)\\s*${CURRENCY_SOURCE}${PLAIN_AMOUNT_SOURCE}`, 'iu'),
+      new RegExp(`(?:sold|sell|selling)\\s+each\\s+(?:for|at)\\s*${CURRENCY_SOURCE}${PLAIN_AMOUNT_SOURCE}`, 'iu'),
       new RegExp(`(?:each|per\\s+[\\p{L}]+).{0,40}?(?:sold|sell|selling)\\s+(?:for|at)\\s*${CURRENCY_SOURCE}${PLAIN_AMOUNT_SOURCE}`, 'iu'),
-      new RegExp(`(?:kowace|kowane).{0,40}?${CURRENCY_SOURCE}${PLAIN_AMOUNT_SOURCE}`, 'iu')
+      new RegExp(`(?:kowace|kowane).{0,40}?${CURRENCY_SOURCE}${PLAIN_AMOUNT_SOURCE}`, 'iu'),
+      new RegExp(`na\\s+siyar\\s+ita\\s+akan\\s+(?:kawano|kwano)\\s+(?:daya|ɗaya|guda)\\s*(?:naira\\s*)?${PLAIN_AMOUNT_SOURCE}`, 'iu')
     ];
     const costPatterns = [
       new RegExp(`(?:purchase\\s+price|cost\\s+price|farashin\\s+saye)\\s*(?:is|of|na|=|:)?\\s*${CURRENCY_SOURCE}${PLAIN_AMOUNT_SOURCE}`, 'iu'),
-      new RegExp(`(?:bought|purchased|sayi|saye).{0,80}?\\bat\\s*${CURRENCY_SOURCE}${PLAIN_AMOUNT_SOURCE}\\s*each`, 'iu')
+      new RegExp(`(?:bought|purchased|sayi|saye).{0,80}?\\b(?:at|for)\\s*${CURRENCY_SOURCE}${PLAIN_AMOUNT_SOURCE}\\s*each`, 'iu'),
+      new RegExp(`(?:duk|kowace|kowane)\\s+(?:kawano|kwano)\\s+(?:daya|ɗaya|guda)\\s+naira\\s*${PLAIN_AMOUNT_SOURCE}`, 'iu')
     ];
     const findCents = patterns => {
       for (const pattern of patterns) {
@@ -281,12 +311,21 @@
     if (expenses.length > 1) lines.push(isHa ? 'An tara duk kuɗaɗen da aka ambata.' : 'All explicitly stated expenses are included.');
     if (costCents !== null) {
       const profit = revenueCents - totalExpenses;
-      const profitLabel = profit >= 0n ? (isHa ? 'Riba bayan kuɗaɗen da aka lissafa' : 'Profit after stated costs') : (isHa ? 'Asara bayan kuɗaɗen da aka lissafa' : 'Loss after stated costs');
+      const profitLabel = profit >= 0n
+        ? (otherExpenses > 0n
+          ? (isHa ? 'Riba bayan kuɗaɗen da aka ambata, kafin ƙarin kuɗaɗen da ba a ambata ba' : 'Profit after stated expenses, before additional unreported expenses')
+          : (isHa ? 'Riba kafin ƙarin kuɗaɗen da ba a ambata ba' : 'Profit before additional unreported expenses'))
+        : (otherExpenses > 0n
+          ? (isHa ? 'Asara bayan kuɗaɗen da aka ambata, kafin ƙarin kuɗaɗen da ba a ambata ba' : 'Loss after stated expenses, before additional unreported expenses')
+          : (isHa ? 'Asara kafin ƙarin kuɗaɗen da ba a ambata ba' : 'Loss before additional unreported expenses'));
       lines.push(`${profitLabel}: ${formatMoney(profit < 0n ? -profit : profit, lang)}`);
       if (revenueCents !== 0n) {
         lines.push(`${isHa ? 'Kason riba ko asara bisa kuɗin shiga' : 'Profit/loss margin on revenue'}: ${formatNumber(Number(profit) / Number(revenueCents) * 100, lang)}%`);
       } else {
         lines.push(isHa ? 'Ba za a iya lissafa kaso bisa kuɗin shiga sifili ba.' : 'Profit/loss margin cannot be calculated with zero revenue.');
+      }
+      if (costCents !== null && costCents > 0n) {
+        lines.push(`${isHa ? 'Ribar kaso bisa kuɗin saye' : 'Return on purchase cost'}: ${formatNumber(Number(profit) / Number(costCents) * 100, lang)}%`);
       }
       if (quantity !== null && quantity > 0) {
         const quantityBigInt = BigInt(quantity);
@@ -316,9 +355,32 @@
       return { type: 'error', answer: lang === 'ha' ? 'Shigarwar ta yi tsawo sosai. A takaita ta zuwa haruffa 4,000.' : 'That message is too long. Please keep it under 4,000 characters.' };
     }
     const isHa = lang === 'ha';
-    const mathTopic = /[\d₦%+=*/^()]|\b(math|calculate|what is|solve|equation|percentage|percent|profit|loss|revenue|expense|balance|cost|price|discount|ratio|interest|loan|area|mean|median|probability|convert|lissafi|lissafa|nawa|riba|asara|kaso|ragi|lamuni|farashi|kuɗi|kudi|sayar|saye)\b/iu.test(input);
+    const normalized = input.normalize('NFC').toLocaleLowerCase().replace(/[.!?]+$/u, '').trim();
+    if (/^(?:hi|hello|hey|good morning|good afternoon|good evening|sannu|ina kwana|ina wuni|barka da safiya|barka da yamma|na gode|thanks|thank you)$/iu.test(normalized)) {
+      return { type: 'greeting', answer: isHa ? 'Sannu! Ni ne MK MATH BOT, mataimakin lissafi. Ka kawo tambayarka mu warware ta tare.' : 'Hello! I am MK MATH BOT, your mathematics assistant. Ask a question and we can work through it together.' };
+    }
+    if (/^(?:who are you|what is your name|what is mk math bot|what is this bot|what can you do|what do you do|waye kai|waye ke|menene mk math bot|menene sunanka|me kake iya yi)$/iu.test(normalized)) {
+      return { type: 'identity', answer: isHa ? 'Ni ne MK MATH BOT. Ina taimakawa da lissafin da injin cikin na’ura ke goyan baya; lissafi mai rikitarwa na iya buƙatar sabis na Online AI da aka haɗa.' : 'I am MK MATH BOT. I help with mathematics supported by the on-device engine; complex problems may require a configured Online AI service.' };
+    }
+    const contextText = Array.isArray(options.context) ? options.context.map(item => typeof item?.text === 'string' ? item.text : '').join(' ').slice(-12000) : '';
+    const followUp = /^(?:why(?: is that)?|how did you get that|how much(?: is it| do i get| remains| will i pay)?|what remains|what is left|what is my profit|explain that|show the steps|check my work|is that correct|me ya sa(?: amsar ta zama haka)?|ka nuna min mataki(?:-mataki)?|ka duba ko na yi daidai|nawa(?: ne| ya rage| zan samu| ce ribata| na kashe| zan biya)?|na ci riba nawa|idan na sayar fa)$/iu.test(normalized);
+    if (followUp && contextText) {
+      const previousQuestion = [...options.context].reverse().find(item => item?.role === 'user' && typeof item.text === 'string')?.text;
+      if (previousQuestion) {
+        const previousResult = analyze(previousQuestion, { lang });
+        if (previousResult.type === 'math') return { type: 'follow-up', answer: isHa ? `Dangane da tambayarka ta baya:\n${previousResult.answer}` : `Based on your previous question:\n${previousResult.answer}` };
+      }
+      return { type: 'clarification', answer: isHa ? 'Wane sakamako ko mataki kake so in yi bayani a kai? Ka nuna min ɓangaren tambayar.' : 'Which result or step from the previous calculation would you like me to explain or check?' };
+    }
+    if (followUp) {
+      return { type: 'clarification', answer: isHa ? 'Don Allah ka turo tambayar lissafin ko lambobin da kake magana a kai.' : 'Please include the calculation or numbers you are referring to.' };
+    }
+    if (/^(?:how much|what remains|what is left|what is my profit|how much will i pay|nawa ne|nawa zan samu|nawa ce ribata|na ci riba nawa|nawa na kashe|nawa ya rage|nawa zan biya|idan na sayar fa|ka warware min|ka nuna min mataki(?:-mataki)?|ka duba ko na yi daidai)$/iu.test(normalized)) {
+      return { type: 'clarification', answer: isHa ? 'Don Allah ka turo tambayar lissafin ko lambobin da kake magana a kai.' : 'Please include the calculation or numbers you are referring to.' };
+    }
+    const mathTopic = /[\d₦%+=*/^()]|\b(math|mathematics|algebra|geometry|trigonometry|calculus|calculate|compute|evaluate|prove|proof|theorem|show that|simplify|factor|expand|differentiate|integrate|derive|what is|solve|equation|inequality|polynomial|matrix|matrices|determinant|vector|sequence|series|limit|percentage|percent|profit|loss|revenue|expense|balance|cost|price|discount|ratio|interest|loan|area|volume|perimeter|triangle|circle|angle|mean|median|variance|probability|statistics|convert|square root|square|root|sqrt|log|ln|sin|cos|tan|abs|derivative|integral|lissafi|lissafa|lissafi na|nawa|riba|asara|kaso|ragi|lamuni|farashi|kuɗi|kudi|sayar|saye|mataki|matakai|ma'auni|ma'aunai|jerin)\b/iu.test(input);
     if (!mathTopic) {
-      return { type: 'unrelated', answer: isHa ? 'Ni ne MK MATH BOT, mataimakin lissafi. Zan iya taimaka da lissafi, kaso, riba, asara, da nazarin kasuwanci mai ƙididdiga.' : 'I am MK MATH BOT, a mathematics assistant. I can help with calculations, mathematics, profit, loss, and numerical business analysis.' };
+      return { type: 'unrelated', answer: isHa ? 'Aboki, ni MK MATH BOT ne, mataimakinka na lissafi. An tsara ni domin taimaka maka wajen warware matsalolin lissafi, fahimtar sakamakonsu, da ba da shawara bisa lissafi. Ka kawo min tambayar lissafi, mu warware ta tare!' : "Friend, I'm MK MATH BOT, your mathematics assistant. I'm designed to help with calculations, mathematical reasoning, and advice based on numerical results. Please ask me a mathematics-related question and I'll help you work through it." };
     }
     try {
       const interestMatch = new RegExp(`(simple|compound)\\s+interest\\s+(?:on|of)\\s*${CURRENCY_SOURCE}${PLAIN_AMOUNT_SOURCE}[^.!?\\n]{0,60}?(?:at|rate(?:\\s+of)?)\\s*(\\d+(?:\\.\\d+)?)\\s*%[^.!?\\n]{0,30}?(?:for|over)\\s*(\\d+(?:\\.\\d+)?)\\s*(years?|months?)`, 'iu').exec(input);
@@ -424,9 +486,14 @@
         return { type: 'math', answer: isHa ? `Yanki: ${formatNumber(Number(geometry[2]), lang)} × ${formatNumber(Number(geometry[3]), lang)} = ${formatNumber(area, lang)} murabba'i` : `Rectangle area: ${geometry[2]} × ${geometry[3]} = ${formatNumber(area, lang)} square units` };
       }
 
-      const expression = input.replace(/what is|calculate|compute|evaluate|solve|please|lissafa|nawa ne|=\s*\?/giu, ' ').match(/[\d.,₦\s()+\-*/%^−]+/u)?.[0];
-      if (expression && /\d/.test(expression) && /[+\-*/%^]/.test(expression)) {
-        return { type: 'math', answer: `${expression.trim()} = ${formatNumber(evaluateExpression(expression), lang)}` };
+      const expression = input.replace(/what is|calculate|compute|evaluate|solve|please|lissafa|nawa ne|=\s*\?/giu, ' ').match(/(?:\b(?:sqrt|log|ln|sin|cos|tan|abs|pi|e)\b|π|[\d.,₦\s()+\-*/%^−])+/iu)?.[0];
+      const containsValue = expression && (/[\dπ]/u.test(expression) || /\b(?:pi|e)\b/iu.test(expression));
+      const containsFunction = expression && /\b(?:sqrt|log|ln|sin|cos|tan|abs)\b/iu.test(expression);
+      const containsOperator = expression && /[+\-*/%^]/u.test(expression);
+      if (expression && containsValue && (containsFunction || containsOperator || /^\s*(?:pi|π|e)\s*$/iu.test(expression))) {
+        const result = evaluateExpression(expression);
+        const radiansNote = /\b(?:sin|cos|tan)\b/iu.test(expression) ? (isHa ? ' (kusurwoyi suna amfani da radian)' : ' (angles are in radians)') : '';
+        return { type: 'math', answer: `${expression.trim()} = ${formatNumber(result, lang)}${radiansNote}` };
       }
       return {
         type: 'unsupported',
@@ -435,6 +502,7 @@
     } catch (error) {
       const messages = {
         'division-by-zero': isHa ? 'Ba za a iya rabawa da sifili ba.' : 'Division by zero is undefined.',
+        'invalid-domain': isHa ? 'Wannan lissafi yana wajen iyakar lambobin da aka yarda.' : 'That operation is outside its valid mathematical domain.',
         'invalid-discount': isHa ? 'Rangwame ya kamata ya kasance tsakanin 0% da 100%.' : 'Discount must be between 0% and 100%.',
         'incompatible-units': isHa ? 'Ba za a iya canza waɗannan nau’in raka’a kai tsaye ba.' : 'Those units cannot be converted directly.',
         'no-unique-solution': isHa ? 'Wannan lissafin ba shi da amsa guda ɗaya.' : 'This equation does not have a unique solution.',
