@@ -280,8 +280,8 @@ test('configured backend requests time out rather than hanging indefinitely', as
 
 test('dashboard exposes a bilingual bot tile, accessible chat, and lazy module loading', () => {
   assert.match(appHtml, /\{id:'mathbot',icon:'∑',title:'mathbot',desc:'mathbotDesc'\}/);
-  assert.match(appHtml, /Object\.assign\(translations\.ha,\{mathbot:'MK MATH BOT'/);
-  assert.match(appHtml, /Object\.assign\(translations\.en,\{mathbot:'MK MATH BOT'/);
+  assert.match(appHtml, /Object\.assign\(translations\.ha,\{[^}]*mathbot:'MK MATH BOT'/);
+  assert.match(appHtml, /Object\.assign\(translations\.en,\{[^}]*mathbot:'MK MATH BOT'/);
   assert.match(appHtml, /role="log" aria-live="polite"/);
   assert.match(appHtml, /id="botModeSwitch"[^>]+role="group"/);
   assert.ok(appHtml.indexOf('class="bot-mode-switch"') < appHtml.indexOf('class="bot-messages"'));
