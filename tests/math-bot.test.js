@@ -267,6 +267,20 @@ test('backend failures do not silently substitute a local answer', async () => {
   await assert.rejects(botClient.createClient({ endpoint: 'https://math.example.test/api?api_key=secret' }).replyOnline('25 + 15'), { message: 'invalid-backend-url' });
 });
 
+test('online adapter preserves an explicit backend timeout response', async () => {
+  const client = botClient.createClient({
+    endpoint: 'https://math.example.test/api',
+    fetch: async () => new Response(JSON.stringify({ error: 'provider_timeout' }), {
+      status: 504,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  });
+  await assert.rejects(
+    client.replyOnline('Solve 2x + 3 = 11', { lang: 'en' }),
+    { message: 'backend-timeout' }
+  );
+});
+
 test('configured backend requests time out rather than hanging indefinitely', async () => {
   const client = botClient.createClient({
     endpoint: 'https://math.example.test/api',
