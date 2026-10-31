@@ -9,6 +9,29 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://127.0.0.1:8000",
 ];
 
+const RATE_LIMIT_TIMEOUT_MS = 4000;
+const PROVIDER_TIMEOUT_MS = 18000;
+
+async function fetchWithTimeout(fetchImpl, url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetchImpl(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function logStage(stage, startedAt, outcome) {
+  // Log operational metadata only; never log prompts, IPs, credentials, or provider bodies.
+  console.log(JSON.stringify({
+    event: "mk_math_bot_stage",
+    stage,
+    outcome,
+    duration_ms: Math.max(0, Date.now() - startedAt),
+  }));
+}
+
 function jsonResponse(payload, status, corsHeaders = {}) {
   return new Response(JSON.stringify(payload), {
     status,
@@ -166,7 +189,9 @@ export function createHandler({
 
     let rateLimit;
     try {
-      const rateResponse = await fetchImpl(
+      const rateStartedAt = Date.now();
+      const rateResponse = await fetchWithTimeout(
+        fetchImpl,
         `${supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/consume_math_bot_rate_limit`,
         {
           method: "POST",
@@ -177,13 +202,20 @@ export function createHandler({
           },
           body: JSON.stringify({ p_client_hash: clientHash }),
         },
+        RATE_LIMIT_TIMEOUT_MS,
       );
+      logStage("rate_limit", rateStartedAt, rateResponse.ok ? "ok" : "http_error");
       if (!rateResponse.ok) throw new Error("rate-limit-request-failed");
       const ratePayload = await rateResponse.json();
       rateLimit = Array.isArray(ratePayload) ? ratePayload[0] : ratePayload;
       if (!rateLimit || typeof rateLimit.allowed !== "boolean") throw new Error("invalid-rate-limit-response");
-    } catch {
-      return jsonResponse({ error: "rate_limit_unavailable" }, 503, corsHeaders);
+    } catch (error) {
+      const timedOut = error instanceof DOMException && error.name === "AbortError";
+      return jsonResponse(
+        { error: timedOut ? "rate_limit_timeout" : "rate_limit_unavailable" },
+        timedOut ? 504 : 503,
+        corsHeaders,
+      );
     }
 
     if (!rateLimit.allowed) {
@@ -211,7 +243,9 @@ export function createHandler({
 
     let providerResponse;
     try {
-      providerResponse = await fetchImpl(
+      const providerStartedAt = Date.now();
+      providerResponse = await fetchWithTimeout(
+        fetchImpl,
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
         {
           method: "POST",
@@ -228,9 +262,16 @@ export function createHandler({
             },
           }),
         },
+        PROVIDER_TIMEOUT_MS,
       );
-    } catch {
-      return jsonResponse({ error: "provider_unavailable" }, 502, corsHeaders);
+      logStage("gemini", providerStartedAt, providerResponse.ok ? "ok" : `http_${providerResponse.status}`);
+    } catch (error) {
+      const timedOut = error instanceof DOMException && error.name === "AbortError";
+      return jsonResponse(
+        { error: timedOut ? "provider_timeout" : "provider_unavailable" },
+        timedOut ? 504 : 502,
+        corsHeaders,
+      );
     }
 
     if (!providerResponse.ok) {
