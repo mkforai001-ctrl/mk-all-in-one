@@ -8,6 +8,10 @@
   const MAX_MESSAGE_LENGTH = 4000;
   const DEFAULT_TIMEOUT_MS = 15000;
   const MODE_STORAGE_KEY = 'mkcalc-bot-mode';
+  const HISTORY_STORAGE_KEY = 'mkcalc-bot-history-v1';
+  const MAX_HISTORY_MESSAGES = 80;
+  const MAX_HISTORY_TEXT_LENGTH = 12000;
+  const MAX_HISTORY_TOTAL_CHARS = 60000;
 
   function createModePreference(storage) {
     let store = storage;
@@ -23,6 +27,50 @@
         mode = next;
         try { store?.setItem(MODE_STORAGE_KEY, mode); } catch {}
         return mode;
+      }
+    });
+  }
+
+  function createConversationStore(storage, options = {}) {
+    let store = storage;
+    try { if (store === undefined) store = root.localStorage; } catch { store = null; }
+    const maxMessages = Number.isInteger(options.maxMessages) && options.maxMessages > 0 ? Math.min(options.maxMessages, 200) : MAX_HISTORY_MESSAGES;
+    const maxTextLength = Number.isInteger(options.maxTextLength) && options.maxTextLength > 0 ? Math.min(options.maxTextLength, 20000) : MAX_HISTORY_TEXT_LENGTH;
+    const maxTotalChars = Number.isInteger(options.maxTotalChars) && options.maxTotalChars > 0 ? Math.min(options.maxTotalChars, 100000) : MAX_HISTORY_TOTAL_CHARS;
+    const sensitive = /(?:api[_-]?key|access[_-]?token|service[_-]?role|secret)\s*[:=]\s*\S+|\bBearer\s+[A-Za-z0-9._~-]{16,}\b|\b(?:sk-[A-Za-z0-9_-]{16,}|sb_secret_[A-Za-z0-9_-]{12,})/iu;
+
+    function normalize(messages) {
+      if (!Array.isArray(messages)) return [];
+      const normalized = [];
+      let total = 0;
+      for (const item of messages.slice(-maxMessages)) {
+        if (!item || !['user', 'assistant'].includes(item.role) || typeof item.text !== 'string') continue;
+        const text = item.text.trim().slice(0, maxTextLength);
+        if (!text || sensitive.test(text) || total + text.length > maxTotalChars) continue;
+        normalized.push({ role: item.role, text });
+        total += text.length;
+      }
+      return normalized;
+    }
+
+    return Object.freeze({
+      load() {
+        try {
+          const raw = store?.getItem(HISTORY_STORAGE_KEY);
+          return raw ? normalize(JSON.parse(raw)) : [];
+        } catch { return []; }
+      },
+      save(messages) {
+        const safeMessages = normalize(messages);
+        try {
+          if (!store) return false;
+          store.setItem(HISTORY_STORAGE_KEY, JSON.stringify(safeMessages));
+          return true;
+        } catch { return false; }
+      },
+      clear() {
+        try { store?.removeItem(HISTORY_STORAGE_KEY); return true; }
+        catch { return false; }
       }
     });
   }
@@ -103,5 +151,5 @@
     return Object.freeze({ reply, replyOffline, replyOnline, hasBackend: Boolean(endpoint) });
   }
 
-  return Object.freeze({ createClient, createModePreference, MAX_MESSAGE_LENGTH });
+  return Object.freeze({ createClient, createModePreference, createConversationStore, MAX_MESSAGE_LENGTH, HISTORY_STORAGE_KEY, MAX_HISTORY_MESSAGES });
 });

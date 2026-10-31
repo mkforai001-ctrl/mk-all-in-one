@@ -290,6 +290,9 @@ test('dashboard exposes a bilingual bot tile, accessible chat, and lazy module l
   assert.match(appHtml, /botOnlineMode:'ONLINE AI'/);
   assert.match(appHtml, /botOnlineNotConfigured/);
   assert.match(appHtml, /<textarea class="bot-input" id="botInput"/);
+  assert.doesNotMatch(appHtml, /data-bot-example="business"/);
+  assert.match(appHtml, /botUnsupportedOfferOnline/);
+  assert.match(appHtml, /createConversationStore/);
   assert.match(appHtml, /import\('\.\/math-bot\.js'\)/);
   assert.match(appHtml, /import\('\.\/math-bot-client\.js'\)/);
   assert.doesNotMatch(appHtml, /<script[^>]+src="\.\/math-bot(?:-client)?\.js"/);
@@ -305,4 +308,58 @@ test('dashboard exposes a bilingual bot tile, accessible chat, and lazy module l
   assert.match(appHtml, /modules\.client\.replyOffline/);
   assert.match(appHtml, /modules\.client\.replyOnline/);
   assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '..', 'math-bot.js'), 'utf8'), /\beval\s*\(/);
+});
+
+test('conversation history persists only bounded user and assistant messages', () => {
+  const values = new Map();
+  const storage = {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: key => values.delete(key)
+  };
+  const store = botClient.createConversationStore(storage, { maxMessages: 3, maxTextLength: 8, maxTotalChars: 30 });
+  assert.equal(store.save([
+    { role: 'system', text: 'must not persist' },
+    { role: 'user', text: 'one' },
+    { role: 'assistant', text: 'two' },
+    { role: 'user', text: 'three-three-three' },
+    { role: 'assistant', text: 'four' }
+  ]), true);
+  assert.deepEqual(store.load(), [
+    { role: 'assistant', text: 'two' },
+    { role: 'user', text: 'three-th' },
+    { role: 'assistant', text: 'four' }
+  ]);
+});
+
+test('conversation history rejects credential-like messages and tolerates corrupt storage', () => {
+  const values = new Map();
+  const storage = {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: key => values.delete(key)
+  };
+  const store = botClient.createConversationStore(storage);
+  store.save([
+    { role: 'user', text: 'What is 2 + 2?' },
+    { role: 'user', text: 'api_key=super-secret-value' },
+    { role: 'assistant', text: 'Bearer abcdefghijklmnopqrstuvwxyz' }
+  ]);
+  assert.deepEqual(store.load(), [{ role: 'user', text: 'What is 2 + 2?' }]);
+  values.set(botClient.HISTORY_STORAGE_KEY, '{broken');
+  assert.deepEqual(store.load(), []);
+});
+
+test('conversation history can be cleared explicitly', () => {
+  const values = new Map();
+  const storage = {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: key => values.delete(key)
+  };
+  const store = botClient.createConversationStore(storage);
+  store.save([{ role: 'user', text: 'Remember this locally' }]);
+  assert.equal(store.load().length, 1);
+  assert.equal(store.clear(), true);
+  assert.deepEqual(store.load(), []);
 });

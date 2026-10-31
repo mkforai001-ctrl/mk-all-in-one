@@ -47,7 +47,7 @@ test('manifest declares existing PNG icons with accurate sizes and maskable supp
 
 test('service worker caches the install icons and avoids caching failed responses', () => {
   assert.match(html, /serviceWorker\.register\('\.\/sw\.js'\)/);
-  assert.match(worker, /const CACHE_NAME = 'mk-calculator-v4'/);
+  assert.match(worker, /const CACHE_NAME = 'mk-calculator-v5'/);
   assert.match(worker, /'\.\/icons\/mk-calculator-192\.png'/);
   assert.match(worker, /'\.\/icons\/mk-calculator-512\.png'/);
   assert.match(worker, /if \(response\.ok\) await cache\.put\(request, response\.clone\(\)\)/);
