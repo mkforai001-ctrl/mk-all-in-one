@@ -6,7 +6,7 @@
   if (root) root.MKMathBotClient = api;
 })(typeof globalThis === 'undefined' ? this : globalThis, function createClientApi(root) {
   const MAX_MESSAGE_LENGTH = 4000;
-  const DEFAULT_TIMEOUT_MS = 15000;
+  const DEFAULT_TIMEOUT_MS = 25000;
   const MODE_STORAGE_KEY = 'mkcalc-bot-mode';
   const HISTORY_STORAGE_KEY = 'mkcalc-bot-history-v1';
   const MAX_HISTORY_MESSAGES = 80;
@@ -127,6 +127,7 @@
           body: JSON.stringify(requestBody),
           signal: controller.signal
         });
+        if (response.status === 504) throw new Error('backend-timeout');
         if (!response.ok) throw new Error('backend-unavailable');
         if (!response.headers?.get('content-type')?.includes('application/json')) throw new Error('invalid-backend-response');
         const payload = await response.json();
@@ -135,7 +136,7 @@
         }
         return { source: 'backend', type: typeof payload.type === 'string' ? payload.type : 'math', answer: payload.answer };
       } catch (error) {
-        if (['invalid-backend-response', 'backend-unavailable', 'invalid-backend-url'].includes(error.message)) throw error;
+        if (['invalid-backend-response', 'backend-unavailable', 'backend-timeout', 'invalid-backend-url'].includes(error.message)) throw error;
         if (controller.signal.aborted) throw new Error('backend-timeout');
         throw new Error('backend-unavailable');
       } finally {
