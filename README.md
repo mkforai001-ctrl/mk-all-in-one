@@ -125,3 +125,12 @@ To use Google Search Console:
 5. Monitor the Page indexing and Search results performance reports for discovery and search activity.
 
 Google's official guides: [verify site ownership](https://support.google.com/webmasters/answer/9008080), [submit a sitemap](https://support.google.com/webmasters/answer/7451001), and [URL Inspection](https://support.google.com/webmasters/answer/9012289). Search Console actions do not guarantee that a page will be indexed or shown for a particular query. GitHub Pages serves static files and does not provide server-side rendering controls or arbitrary response-header configuration for this project.
+
+
+### MK MATH BOT conversation privacy
+
+- Offline calculations run locally in the browser.
+- Conversation history is stored only in this browser's local storage, bounded to the latest 80 messages and 60,000 characters.
+- The Clear conversation control removes the locally stored history.
+- Credential-like messages are excluded from persistence as a precaution; users should never enter passwords, API keys, or access tokens into the chat.
+- Online AI remains unavailable until a secure server-side provider integration is configured. Provider secrets must never be placed in frontend files.
