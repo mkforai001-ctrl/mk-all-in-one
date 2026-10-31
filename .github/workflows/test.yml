@@ -26,4 +26,4 @@ jobs:
           node --check math-bot-client.js
           node --check sw.js
       - name: Run automated tests
-        run: node --test tests/*.test.js
+        run: node --experimental-strip-types --test tests/*.test.js
